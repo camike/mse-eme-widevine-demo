@@ -1,0 +1,30 @@
+<?xml version="1.0" ?>
+<MPD mediaPresentationDuration="PT3M1.473S" minBufferTime="PT15.01S" profiles="urn:mpeg:dash:profile:isoff-live:2011" type="static" xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:cenc="urn:mpeg:cenc:2013">
+  <!-- Created with Bento4 mp4-dash.py, VERSION=1.8.0-618 -->
+  <Period>
+    <!-- Video -->
+    <AdaptationSet maxHeight="360" maxWidth="640" mimeType="video/mp4" minHeight="360" minWidth="640" segmentAlignment="true" startWithSAP="1">
+      <!-- MPEG Common Encryption -->
+      <ContentProtection cenc:default_KID="90351951-686b-5e1b-a222-439ecec1f12a" schemeIdUri="urn:mpeg:dash:mp4protection:2011" value="cenc"/>
+      <!-- Widevine -->
+      <ContentProtection schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed">
+        <cenc:pssh>AAAARnBzc2gAAAAA7e+LqXnWSs6jyCfc1R0h7QAAACYIARIQkDUZUWhrXhuiIkOezsHxKhoNd2lkZXZpbmVfdGVzdCIBKg==</cenc:pssh>
+      </ContentProtection>
+      <SegmentTemplate duration="15015" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/seg-$Number$.m4s" startNumber="1" timescale="1000"/>
+      <Representation bandwidth="648903" codecs="avc1.42C01E" frameRate="24000/1001" height="360" id="video/avc1" scanType="progressive" width="640"/>
+    </AdaptationSet>
+    <!-- Audio -->
+    <AdaptationSet mimeType="audio/mp4" segmentAlignment="true" startWithSAP="1">
+      <!-- MPEG Common Encryption -->
+      <ContentProtection cenc:default_KID="90351951-686b-5e1b-a222-439ecec1f12a" schemeIdUri="urn:mpeg:dash:mp4protection:2011" value="cenc"/>
+      <!-- Widevine -->
+      <ContentProtection schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed">
+        <cenc:pssh>AAAARnBzc2gAAAAA7e+LqXnWSs6jyCfc1R0h7QAAACYIARIQkDUZUWhrXhuiIkOezsHxKhoNd2lkZXZpbmVfdGVzdCIBKg==</cenc:pssh>
+      </ContentProtection>
+      <SegmentTemplate duration="15015" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/seg-$Number$.m4s" startNumber="1" timescale="1000"/>
+      <Representation audioSamplingRate="44100" bandwidth="102964" codecs="mp4a.40.2" id="audio/und/mp4a">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>

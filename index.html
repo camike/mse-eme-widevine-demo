@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+</head>
+
+
+<script>
+
+  var licenseUrl = "https://widevine-proxy.appspot.com/proxy";
+  var serverCertificate;
+  var mediaKeys;
+
+  var widevineOptions = [
+     { 
+	   initDataTypes: ['keyids','webm'],
+       audioCapabilities: [
+         { contentType: 'audio/mp4; codecs="mp4a.40.2"' },
+		// { contentType: 'audio/webm; codecs="opus"' },
+       // { contentType: 'audio/webm; codecs="vorbis"' }
+       ],
+       videoCapabilities: [
+         { contentType: 'video/mp4; codecs="avc1.42c01e"' },
+		// { contentType: 'video/webm; codecs="vp9"' , robustness: 'foo'},
+        // { contentType: 'video/webm; codecs="vp8"' , robustness: 'bar'}
+       ]
+     }
+    ];
+	var video = document.getElementById('video');
+	navigator.requestMediaKeySystemAccess('com.widevine.alpha', widevineOptions).then(function(keySystemAccess) {
+        return keySystemAccess.createMediaKeys();
+      }).then(function(createdMediaKeys) {
+        video.setMediaKeys(createdMediaKeys);
+		video.mediaKeysObject = createdMediaKeys;
+      }).catch(function(err) {
+        console.error('Failed to set up MediaKeys', err);
+      })
+      ;
+
+	function handleInitData(event){
+	   var video = event.target;
+	   addSession(video, event.initDataType, event.initData);
+	}
+
+  
+  function addSession(video, initDataType, initData) {
+    if (video.mediaKeysObject) {
+      makeNewRequest(video.mediaKeysObject, initDataType, initData);
+    } else {
+      //video.pendingSessionData.push({initDataType: initDataType, initData: initData});
+    }
+  }
+  
+  function makeNewRequest(mediaKeys, initDataType, initData) {
+    var keySession = mediaKeys.createSession();
+    keySession.addEventListener("message", licenseRequestReady, false);
+    keySession.generateRequest(initDataType, initData).catch(
+      console.error.bind(console, 'Unable to create or initialize key session')
+    );
+  }
+  
+
+   function licenseRequestReady(event) {
+    var request = event.message;
+    var xmlhttp = new XMLHttpRequest();
+    xmlhttp.keySession = event.target;
+	xmlhttp.responseType = 'arraybuffer';
+    xmlhttp.open("POST", licenseUrl);
+    xmlhttp.onreadystatechange = function() {
+      if (xmlhttp.readyState == 4) {
+        var license = new Uint8Array(xmlhttp.response);
+        xmlhttp.keySession.update(license).catch(
+          console.error.bind(console, 'update() failed')
+        );
+      }
+    }
+    xmlhttp.send(request);
+  }
+</script>
+
+
+<body onload="document.getElementById('video').addEventListener('encrypted',handleInitData);">
+ <video autoplay id='video' controls=controls></video>
+</body>
+<script>
+  //var media_path = "hls-media";
+  var media_path = "encrypted-media";
+  var video_mimetype = 'video/mp4; codecs="avc1.42C01E"';
+  var audio_mimetype = 'audio/mp4; codecs="mp4a.40.2"';
+  var cur_video_segment = 0;
+  var cur_audio_segment = 0;
+  (function(){
+	  var cacheVideo = [];
+	  var cacheAudio = [];
+	  var videoSegmentUrl = [];
+	  var audioSegmentUrl = [];
+	  var down_video_list = [];
+	  var down_audio_list = [];
+	  
+	  var video_pending_segment = {pending:false, index:0, sourceBuffer: null};
+	  var audio_pending_segment = {pending:false, index:0, sourceBuffer: null};
+	  
+	  videoSegmentUrl[0] = media_path+"/video/avc1/"+"init.mp4";
+	  for(var i=1;i<14;i++)
+		 videoSegmentUrl[i]= media_path+"/video/avc1/"+"seg-"+i+".m4s";
+	  
+	  audioSegmentUrl[0] = media_path+"/audio/und/mp4a/"+"init.mp4";
+	  for(var i=1;i<15;i++)
+		 audioSegmentUrl[i]= media_path+"/audio/und/mp4a/"+"seg-"+i+".m4s";
+		 
+	  var worker = new Worker("download.js");
+	  worker.onmessage = function(event){
+	     if(event.data.type == "video")
+            VideoSegmentLoaded(event.data);
+		 else if(event.data.type == "audio")
+		    AudioSegmentLoaded(event.data);
+	  }
+	  preDownloadData();
+	  
+	  
+	  function VideoSegmentLoaded(data){
+         cacheVideo[cacheVideo.length] = data;
+		 if(video_pending_segment.pending){
+		     if(data.index == video_pending_segment.index){
+			     video_pending_segment.sourceBuffer.appendBuffer(data.fragment);
+				 video_pending_segment.pending = false;
+				 cur_video_segment++;
+			 }
+		 }
+      }
+	  
+	  function AudioSegmentLoaded(data){
+         cacheAudio[cacheAudio.length] = data;
+		 if(audio_pending_segment.pending){
+		     if(data.index == audio_pending_segment.index){
+			     audio_pending_segment.sourceBuffer.appendBuffer(data.fragment);
+				 audio_pending_segment.pending = false;
+				 cur_audio_segment++;
+			 }
+		 }
+      }
+	  
+	  function preDownloadData(){
+		 if(!getVideoSegmentByIndex(cur_video_segment))
+			 downloadVideoByIndex(cur_video_segment);
+		 if(!getVideoSegmentByIndex(cur_video_segment+1))
+			 downloadVideoByIndex(cur_video_segment+1);
+		 if(!getVideoSegmentByIndex(cur_video_segment+2))
+			 downloadVideoByIndex(cur_video_segment+2);
+			 
+		 if(!getAudioSegmentByIndex(cur_audio_segment))
+			 downloadAudioByIndex(cur_audio_segment);
+		 if(!getAudioSegmentByIndex(cur_audio_segment+1))
+			 downloadAudioByIndex(cur_audio_segment+1);
+		 if(!getAudioSegmentByIndex(cur_audio_segment+2))
+			 downloadAudioByIndex(cur_audio_segment+2);
+			 
+	  }
+	  
+	  function getVideoSegmentByIndex(index){
+		 for(var i=0;i<cacheVideo.length;i++){
+		 if(cacheVideo[i].index == index)
+			return cacheVideo[i].fragment;
+		 }
+	     return null;
+	  }
+	  function getAudioSegmentByIndex(index){
+		 for(var i=0;i<cacheAudio.length;i++){
+		 if(cacheAudio[i].index == index)
+			return cacheAudio[i].fragment;
+		 }
+	     return null;
+	  }
+	  
+	  function downloadVideoByIndex(index){
+		 if(index >= videoSegmentUrl.length) return;
+		 var is_downloading = false;
+		 for(var i=0;i<down_video_list.length;i++){
+			 if(index == down_video_list[i].index)
+			 is_downloading = true;
+		 }
+		 if(!is_downloading){
+			 var data  = new Object();
+			 data.index = index;
+			 data.type = "video";
+			 data.url = videoSegmentUrl[index];
+			 down_video_list[down_video_list.length] = data;
+			 worker.postMessage(data);
+		 }
+	  }
+	  function downloadAudioByIndex(index){
+		 if(index >= audioSegmentUrl.length) return;
+		 var is_downloading = false;
+		 for(var i=0;i<down_audio_list.length;i++){
+			 if(index == down_audio_list[i].index)
+			 is_downloading = true;
+		 }
+		 if(!is_downloading){
+			 var data  = new Object();
+			 data.index = index;
+			 data.type = "audio";
+			 data.url = audioSegmentUrl[index];
+			 down_audio_list[down_audio_list.length] = data;
+			 worker.postMessage(data);
+		 }
+	  }
+	  
+  
+      function HaveMoreVideoSegments(){
+          return cur_video_segment < videoSegmentUrl.length;
+      }
+	  function HaveMoreAudioSegments(){
+          return cur_audio_segment < audioSegmentUrl.length;
+      }
+	  
+	  function loadAppendVideoSegment(mediaSource){
+	      var segment = getVideoSegmentByIndex(cur_video_segment);
+		  if(segment){
+		     mediaSource.sourceBuffers[0].appendBuffer(segment);
+			 cur_video_segment++;
+			 return;
+		  }
+		  if(!video_pending_segment.pending){
+			 video_pending_segment.pending = true;
+			 video_pending_segment.index = cur_video_segment;
+			 video_pending_segment.sourceBuffer = mediaSource.sourceBuffers[0];
+			 return;
+		  }
+      }
+	  function loadAppendAudioSegment(mediaSource){
+	      var segment = getAudioSegmentByIndex(cur_audio_segment);
+		  if(segment){
+		     mediaSource.sourceBuffers[1].appendBuffer(segment);
+			 cur_audio_segment++;
+			 return;
+		  }
+		  if(!audio_pending_segment.pending){
+			 audio_pending_segment.pending = true;
+			 audio_pending_segment.index = cur_audio_segment;
+			 audio_pending_segment.sourceBuffer = mediaSource.sourceBuffers[1];
+			 return;
+		  }
+      }
+	  
+	  function appendNextVideoSegment(mediaSource) {
+	        preDownloadData();
+			if (mediaSource.readyState == "closed")
+			  return;
+
+			// If we have run out of stream data, then signal end of stream.
+			if (!HaveMoreVideoSegments() && !HaveMoreAudioSegments()) {
+			  //mediaSource.endOfStream();
+			  return;
+			}
+
+			// Make sure the previous append is not still pending.
+			if (mediaSource.sourceBuffers[0].updating)
+				return;
+				
+            loadAppendVideoSegment(mediaSource);
+	  }
+	  function appendNextAudioSegment(mediaSource) {
+	        preDownloadData();
+			if (mediaSource.readyState == "closed")
+			  return;
+
+			// If we have run out of stream data, then signal end of stream.
+			if (!HaveMoreAudioSegments()) {
+			  //mediaSource.endOfStream();
+			  return;
+			}
+
+			// Make sure the previous append is not still pending.
+			if (mediaSource.sourceBuffers[1].updating)
+				return;
+				
+            loadAppendAudioSegment(mediaSource);
+	  }
+	  
+	  var MediaManager = new Object();
+	  MediaManager.appendNextAudioSegment = appendNextAudioSegment;
+	  MediaManager.appendNextVideoSegment = appendNextVideoSegment;
+	  window.mediaManager = MediaManager;
+	  
+  })();
+  
+
+  
+
+  
+  function onSourceOpen(videoTag, e) {
+    var mediaSource = e.target;
+
+    if (mediaSource.sourceBuffers.length > 0)
+        return;
+
+    var videoSourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="avc1.42C01E"');
+	var audioSourceBuffer = mediaSource.addSourceBuffer(audio_mimetype);
+
+    //videoTag.addEventListener('seeking', onSeeking.bind(videoTag, mediaSource));
+    videoTag.addEventListener('progress', onProgress.bind(videoTag, mediaSource));
+
+
+	/*
+    // Append the initialization segment.
+    var firstAppendHandler = function(e) {
+      var sourceBuffer = e.target;
+      sourceBuffer.removeEventListener('updateend', firstAppendHandler);
+
+      // Append some initial media data.
+	  mediaManager.appendNextVideoSegment(mediaSource);
+    };
+	*/
+    //videoSourceBuffer.addEventListener('updateend', firstAppendHandler);
+	//audioSourceBuffer.addEventListener('updateend', firstAppendHandler);
+	mediaManager.appendNextVideoSegment(mediaSource);
+	mediaManager.appendNextAudioSegment(mediaSource);
+  }
+
+ 
+/*
+  function onSeeking(mediaSource, e) {
+    var video = e.target;
+
+    if (mediaSource.readyState == "open") {
+      // Abort current segment append.
+      mediaSource.sourceBuffers[0].abort();
+    }
+
+    // Notify the media segment loading code to start fetching data at the
+    // new playback position.
+    SeekToMediaSegmentAt(video.currentTime);
+
+    // Append a media segment from the new playback position.
+    mediaManager.appendNextVideoSegment(mediaSource);
+  }
+*/
+  function onProgress(mediaSource, e) {
+    mediaManager.appendNextVideoSegment(mediaSource);
+	mediaManager.appendNextAudioSegment(mediaSource);
+  }
+  
+</script>
+
+<script>
+
+  var video = document.getElementById('video');
+  var mediaSource = new MediaSource();
+  mediaSource.addEventListener('sourceopen', onSourceOpen.bind(this, video));
+  video.src = window.URL.createObjectURL(mediaSource);
+  
+</script>
+
+
+
+
+
+
+
+
+
+
+</html>

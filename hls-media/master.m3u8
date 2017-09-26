@@ -1,0 +1,13 @@
+#EXTM3U
+# Created with Bento4 mp4-dash.py, VERSION=1.8.0-618
+#
+#EXT-X-VERSION:6
+
+# Media Playlists
+
+# Audio
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio/mp4a",LANGUAGE="und",NAME="Unknown",AUTOSELECT=YES,DEFAULT=YES,URI="audio/und/mp4a/media.m3u8"
+
+# Video
+#EXT-X-STREAM-INF:AUDIO="audio/mp4a",AVERAGE-BANDWIDTH=682130,BANDWIDTH=744254,CODECS="avc1.42C01E,mp4a.40.2",RESOLUTION=640x360
+video/avc1/media.m3u8
